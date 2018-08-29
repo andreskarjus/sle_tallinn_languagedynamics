@@ -41,6 +41,90 @@ thereps = 1:10  # how many times to replicate (resample+rerun) each word*downsam
 # The following code creates preparatory term matrices and does other preparations
 # Feel free to just run everything from here onwards (but expect it to take time)
 
+
+# functions
+fullppmi = function(pmat, N,colp,rowp, positive=T){
+  library(Matrix, quietly = T)
+  pmat = Matrix::t(pmat)
+  #pmat = (tcmfornews)
+  #set.seed(1)
+  #pmat = matrix(sample(c(0,0,0,0,0,0,1,10),5*10,T), 5,10, byrow=T)
+  #pmat = Matrix::t(Matrix(pmat, sparse=T))
+  
+  # tcmrs = Matrix::rowSums(pmat)
+  # tcmcs = Matrix::colSums(pmat)
+  # N = sum(tcmrs)
+  # colp = tcmcs/N
+  # rowp = tcmrs/N
+  
+  pp = pmat@p+1
+  ip = pmat@i+1
+  tmpx = rep(0,length(pmat@x))
+  for(i in 1:(length(pmat@p)-1) ){ 
+    #for(i in 1:100 ){ 
+    #not0 = which(pmat[, i] > 0)
+    ind = pp[i]:(pp[i+1]-1)
+    not0 = ip[ind]
+    icol = pmat@x[ind]
+    #print(icol)
+    #tmp = log( (pmat[not0,i]/N) / (rowp[not0] * colp[i] ))
+    tmp = log2( (icol/N) / (rowp[not0] * colp[i] ))
+    tmpx[ind] = tmp
+    #print(tmp)
+    # tmp = ifelse(tmp < 0, 0, tmp)
+    #pmat2[not0, i] = tmp
+  }
+  if(positive){
+    tmpx[tmpx<0] = 0 
+  }
+  pmat2 = pmat
+  pmat2@x = tmpx
+  pmat2 = Matrix::t(pmat2) # tagasi sõnad ridadeks
+  pmat2 = drop0(pmat2,is.Csparse=T) # nullid: võtab oma 100 mega maha, väga hea
+  return(pmat2)
+}
+
+someppmi = function(NN, tcm1=tcm[words,],
+                    normvoc_all=normvoc, 
+                    normvoc_sub=normvoc[words]){
+  ptcm = tcm1/NN   # P(w,c)
+  for(w in 1:nrow(ptcm)){
+    tmp = pmax(0, log2( ptcm[w, ] / 
+                          ((normvoc_sub[w]*normvoc_all))  #P(w)*P(c)
+    ) )
+    tmp[is.nan(tmp)]=0
+    ptcm[w,] = tmp
+  }
+  return(ptcm)
+}
+someppmi = cmpfun(someppmi, options=list(optimize=3))
+
+dorelevants = function(ppmimat,relevancy_threshold){
+  relevants = list()
+  relevants = list(); length(relevants) = nrow(ppmimat)
+  ppmimat = Matrix::as.matrix(ppmimat)
+  for(x in 1:nrow(ppmimat)){
+    #y=sort(ppmimat[x,-(union(which(ppmimat[x,]==0), excludeself[x]))], decreasing=T)
+    # self-ppmi is zero, fixed in ppmimat (old: thought text2vec handles itself)
+    tmp = ppmimat[x,-which(ppmimat[x,]==0)]
+    y=tmp[rev(order2(tmp))] # sort2 is decreasing=F BUT MESSES UP NAMES, USE order2
+    y=y[1:min(length(y),relevancy_threshold)] # but this need top ones, so rev
+    relevants[[x]] = y; names(relevants[[x]]) = names(y)
+  }
+  return(relevants)
+}
+dorelevants = cmpfun(dorelevants, options=list(optimize=3))
+dosim =  function(relr, relc){
+  #if(length(relr)>0 & length(relc)>0){   # doesn't seem to occur, always some context
+  # requires fastmatch
+  r1 = fmatch(relc, relr, nomatch = 0) # the intersection part; remove nomatch 0s below
+  r2 = fmatch(relr[r1], relc, nomatch = 0)
+  return(sum( 1/(colMeans(rbind(r1[r1>0],r2))))) #
+  #   } else return(NA)
+}
+
+
+# do vocab
 maxn = length(perioddata) # COHA last decade is 11 023 006
 it = itoken(list(perioddata), progressbar = FALSE)
 voc = prune_vocabulary(create_vocabulary(it), term_count_min = minc)
@@ -55,7 +139,7 @@ Matrix::diag(tcm) = 0
 # Randomly samples from the lexicon, but from equally spaced log freq bands
 vtmp = voc[voc$term_count>499 & grepl(nounregex, voc$term),]
 vtmp1 = vtmp$term_count; names(vtmp1) = rownames(vtmp); rm(vtmp)
-vc = cut(log(vtmp1), 116) # adjust to get different number of words (some bands are empty)
+vc = cut(log(vtmp1), 116) # adjust to get different number of words (some bands may be empty)
 words=c()
 for(v in seq_along(levels(vc))){
   try({words = c(words, sample(names(vtmp1[vc%in%levels(vc)[v]]), 1))})
@@ -77,6 +161,8 @@ for(j in seq_along(words)){
   }
 }
 #length(unlist(randomns))
+
+#### Prepares LSA, PPMI matrices ####
 
 # LSA full:
 lsa_1 = LatentSemanticAnalysis$new(300)
