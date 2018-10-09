@@ -3,3 +3,5 @@ Code to go with Karjus et al., "Two problems and solutions in  evolutionary corp
 Slides (with interactive plots you can play with) available here: https://andreskarjus.github.io/sle_tallinn_languagedynamics
 
 The results.RData file contains precomputed results. See the script (.R file) for more details.
+
+The `coha2000.RData` file constains preparsed (cleaned, tokenized, filtered) sample data to replicate the analsys (load into R using `load()` - it contains one object, called `perioddata`, which is a character vector where each element is a word).
