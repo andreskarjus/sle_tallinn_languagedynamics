@@ -277,7 +277,7 @@ lsa_1 = LatentSemanticAnalysis$new(300) # used 300 dimensions
 # NB: this uses count matrix as input to LSA; apparently usually PPMI matrix is used; but seems to makes no difference with Simlex though
 d1 = lsa_1$fit_transform(tcm) # embeds (symmetric tcm, so no difference which way)
 # should incorporate Levy's "don't use SVD "correctly""?, i.e. without eigenvector weighting (p=0.5).
-
+d1 = lsa_1$fit_transform(ptcm_full)
 
 # PPMI
 N = sum(tcm) # denominator for P(w,c)
